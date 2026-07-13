@@ -1,0 +1,6 @@
+{
+  "watch": ["src"],
+  "ext": "ts,json",
+  "ignore": ["src/**/*.test.ts"],
+  "exec": "node --tls-min-v1.2 ./node_modules/.bin/tsx --tsconfig tsconfig.json src/server.ts"
+}
