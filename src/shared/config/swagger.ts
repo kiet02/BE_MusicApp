@@ -1,5 +1,4 @@
 import swaggerJsdoc from 'swagger-jsdoc';
-import { config } from '@shared/config/env';
 
 const swaggerDefinition: swaggerJsdoc.OAS3Definition = {
   openapi: '3.0.0',
@@ -13,8 +12,8 @@ const swaggerDefinition: swaggerJsdoc.OAS3Definition = {
   },
   servers: [
     {
-      url: `http://localhost:${config.port}/api/v1`,
-      description: 'Development server',
+      url: '/api/v1',
+      description: 'Current Environment',
     },
   ],
   components: {
@@ -138,7 +137,7 @@ const swaggerDefinition: swaggerJsdoc.OAS3Definition = {
 
 const options: swaggerJsdoc.Options = {
   swaggerDefinition,
-  apis: ['./src/modules/**/*.routes.ts'],
+  apis: ['./src/modules/**/*.routes.ts', './dist/modules/**/*.routes.js'],
 };
 
 export const swaggerSpec = swaggerJsdoc(options);

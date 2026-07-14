@@ -81,6 +81,11 @@ app.get('/health', (_req: Request, res: Response) => {
   });
 });
 
+// ─── Root Route ──────────────────────────────────────────────
+app.get('/', (_req: Request, res: Response) => {
+  res.redirect('/docs');
+});
+
 // ─── API Routes ──────────────────────────────────────────────
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', usersRoutes);

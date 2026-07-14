@@ -10,11 +10,16 @@ const startServer = async () => {
 
     // Start server
     const server = app.listen(config.port, () => {
-      logger.info(`🚀 Server is running on http://localhost:${config.port}`);
+      const baseUrl =
+        config.env === 'production' ? `Port ${config.port}` : `http://localhost:${config.port}`;
+
+      logger.info(`🚀 Server is running on ${baseUrl}`);
       logger.info(`📍 Environment: ${config.env}`);
-      logger.info(`📋 Health check: http://localhost:${config.port}/health`);
-      logger.info(`📋 API base URL: http://localhost:${config.port}/api/v1`);
-      logger.info(`📖 Swagger docs: http://localhost:${config.port}/docs`);
+      if (config.env !== 'production') {
+        logger.info(`📋 Health check: ${baseUrl}/health`);
+        logger.info(`📋 API base URL: ${baseUrl}/api/v1`);
+        logger.info(`📖 Swagger docs: ${baseUrl}/docs`);
+      }
     });
 
     // Graceful shutdown
