@@ -4,8 +4,13 @@ import { authController } from './auth.controller';
 import { validate } from '@shared/middlewares/validate.middleware';
 import { authMiddleware } from '@shared/middlewares/auth.middleware';
 import {
-  registerValidation, loginValidation, refreshTokenValidation, googleLoginValidation,
-  forgotPasswordValidation, resetPasswordValidation, changePasswordValidation,
+  registerValidation,
+  loginValidation,
+  refreshTokenValidation,
+  googleLoginValidation,
+  forgotPasswordValidation,
+  resetPasswordValidation,
+  changePasswordValidation,
 } from './auth.validation';
 import { AUTH_ERRORS } from './auth.code';
 
@@ -205,7 +210,12 @@ router.post('/logout-all', authMiddleware, authController.logoutAll);
  *       200:
  *         description: Nếu email tồn tại, link reset đã được gửi
  */
-router.post('/forgot-password', authLimiter, validate(forgotPasswordValidation), authController.forgotPassword);
+router.post(
+  '/forgot-password',
+  authLimiter,
+  validate(forgotPasswordValidation),
+  authController.forgotPassword,
+);
 
 /**
  * @swagger
@@ -234,7 +244,12 @@ router.post('/forgot-password', authLimiter, validate(forgotPasswordValidation),
  *       400:
  *         description: Token không hợp lệ hoặc hết hạn
  */
-router.post('/reset-password', authLimiter, validate(resetPasswordValidation), authController.resetPassword);
+router.post(
+  '/reset-password',
+  authLimiter,
+  validate(resetPasswordValidation),
+  authController.resetPassword,
+);
 
 /**
  * @swagger
@@ -267,7 +282,12 @@ router.post('/reset-password', authLimiter, validate(resetPasswordValidation), a
  *       400:
  *         description: Mật khẩu mới giống mật khẩu cũ
  */
-router.post('/change-password', authMiddleware, validate(changePasswordValidation), authController.changePassword);
+router.post(
+  '/change-password',
+  authMiddleware,
+  validate(changePasswordValidation),
+  authController.changePassword,
+);
 
 /**
  * @swagger

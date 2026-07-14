@@ -19,13 +19,13 @@ export const validate = (schema: ValidationSchema) => {
     for (const source of sources) {
       if (schema[source]) {
         const parsed = schema[source]!.safeParse(req[source]);
-        
+
         if (!parsed.success) {
           if (!firstError) {
             const detail = parsed.error.issues[0];
             const rawMessage = detail.message;
             const hasCustomCode = rawMessage.includes('|');
-            
+
             firstError = {
               code: hasCustomCode ? rawMessage.split('|')[0] : detail.code.toUpperCase(),
               message: hasCustomCode ? rawMessage.split('|')[1] : rawMessage,

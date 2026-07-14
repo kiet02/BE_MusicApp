@@ -41,7 +41,8 @@
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1",
     "winston": "^3.19.0",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "module-alias": "^2.3.4"
   },
   "devDependencies": {
     "@swc/core": "^1.15.43",
@@ -58,7 +59,7 @@
     "@types/swagger-ui-express": "^4.1.8",
     "@typescript-eslint/eslint-plugin": "^8.63.0",
     "@typescript-eslint/parser": "^8.63.0",
-    "eslint": "^10.7.0",
+    "eslint": "^8.57.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.6",
     "jest": "^30.4.2",
@@ -68,6 +69,6 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.23.0",
-    "typescript": "^7.0.2"
+    "typescript": "^5.6.3"
   }
 }

@@ -224,11 +224,7 @@ router
 router
   .route('/:id')
   .get(validate(getUserByIdValidation), usersController.getUserById)
-  .put(
-    authorizeRoles(ROLES.ADMIN),
-    validate(updateUserValidation),
-    usersController.updateUser,
-  )
+  .put(authorizeRoles(ROLES.ADMIN), validate(updateUserValidation), usersController.updateUser)
   .delete(authorizeRoles(ROLES.ADMIN), usersController.deleteUser);
 
 export default router;

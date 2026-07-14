@@ -122,7 +122,12 @@ describe('AuthService', () => {
       (UserMock.findOne as jest.Mock).mockResolvedValue(mockUser());
 
       await expectApiError(
-        () => authService.register({ name: 'Test', email: 'test@example.com', password: 'Strong1pass' }),
+        () =>
+          authService.register({
+            name: 'Test',
+            email: 'test@example.com',
+            password: 'Strong1pass',
+          }),
         StatusCodes.CONFLICT,
         'AUTH_001',
       );

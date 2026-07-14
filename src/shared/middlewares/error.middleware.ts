@@ -16,19 +16,21 @@ export const errorMiddleware = (
   // Handle ApiError (operational errors)
   if (err instanceof ApiError) {
     const hasCustomCode = err.message.includes('|');
-    const customCode = hasCustomCode 
-      ? err.message.split('|')[0] 
+    const customCode = hasCustomCode
+      ? err.message.split('|')[0]
       : err.constructor.name.replace(/Error$/, '').toUpperCase();
-      
+
     const messageText = hasCustomCode ? err.message.split('|')[1] : err.message;
 
     res.status(err.statusCode).json({
       success: false,
       code: err.statusCode,
-      message: err.error ? err.error : {
-        code: customCode,
-        message: messageText
-      },
+      message: err.error
+        ? err.error
+        : {
+            code: customCode,
+            message: messageText,
+          },
       timestamp: new Date().toISOString(),
     });
     return;
@@ -41,7 +43,7 @@ export const errorMiddleware = (
       code: StatusCodes.BAD_REQUEST,
       message: {
         code: 'VALIDATION_ERROR',
-        message: err.message
+        message: err.message,
       },
       timestamp: new Date().toISOString(),
     });
@@ -55,7 +57,7 @@ export const errorMiddleware = (
       code: StatusCodes.BAD_REQUEST,
       message: {
         code: 'INVALID_ID',
-        message: 'Invalid ID format'
+        message: 'Invalid ID format',
       },
       timestamp: new Date().toISOString(),
     });
@@ -69,7 +71,7 @@ export const errorMiddleware = (
       code: StatusCodes.CONFLICT,
       message: {
         code: 'DUPLICATE_FIELD',
-        message: 'Duplicate field value'
+        message: 'Duplicate field value',
       },
       timestamp: new Date().toISOString(),
     });
@@ -83,7 +85,7 @@ export const errorMiddleware = (
       code: StatusCodes.UNAUTHORIZED,
       message: {
         code: 'INVALID_TOKEN',
-        message: 'Invalid token'
+        message: 'Invalid token',
       },
       timestamp: new Date().toISOString(),
     });
@@ -96,7 +98,7 @@ export const errorMiddleware = (
       code: StatusCodes.UNAUTHORIZED,
       message: {
         code: 'TOKEN_EXPIRED',
-        message: 'Token expired'
+        message: 'Token expired',
       },
       timestamp: new Date().toISOString(),
     });
@@ -109,7 +111,7 @@ export const errorMiddleware = (
     code: StatusCodes.INTERNAL_SERVER_ERROR,
     message: {
       code: 'INTERNAL_SERVER_ERROR',
-      message: config.isDevelopment ? err.message : 'Internal server error'
+      message: config.isDevelopment ? err.message : 'Internal server error',
     },
     ...(config.isDevelopment && { stack: err.stack }),
     timestamp: new Date().toISOString(),

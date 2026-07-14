@@ -21,11 +21,13 @@ export const AUTH_ERRORS = {
   VAL_EMAIL_REQUIRED: 'VAL_006|Email is required',
   VAL_PASSWORD_MIN: 'VAL_007|Password must be at least 6 characters',
   VAL_PASSWORD_REQUIRED: 'VAL_008|Password is required',
-  VAL_PASSWORD_WEAK: 'VAL_009|Password must contain at least one uppercase letter, one lowercase letter, and one number',
+  VAL_PASSWORD_WEAK:
+    'VAL_009|Password must contain at least one uppercase letter, one lowercase letter, and one number',
   VAL_ID_TOKEN_REQUIRED: 'VAL_010|ID Token is required',
   VAL_RESET_TOKEN_REQUIRED: 'VAL_011|Reset token is required',
   VAL_NEW_PASSWORD_MIN: 'VAL_012|New password must be at least 6 characters',
   VAL_NEW_PASSWORD_REQUIRED: 'VAL_013|New password is required',
-  VAL_NEW_PASSWORD_WEAK: 'VAL_014|New password must contain at least one uppercase letter, one lowercase letter, and one number',
+  VAL_NEW_PASSWORD_WEAK:
+    'VAL_014|New password must contain at least one uppercase letter, one lowercase letter, and one number',
   VAL_CURRENT_PASSWORD_REQUIRED: 'VAL_015|Current password is required',
 } as const;

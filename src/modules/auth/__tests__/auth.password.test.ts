@@ -74,7 +74,6 @@ describe('Password Management & Logout All', () => {
   // ════════════════════════════════════════════════════════
 
   describe('forgotPassword', () => {
-
     it('should generate reset token and store hashed version in DB', async () => {
       const user = mockUser();
       (UserMock.findOne as jest.Mock).mockResolvedValue(user);
@@ -123,7 +122,8 @@ describe('Password Management & Logout All', () => {
 
       await authService.forgotPassword({ email: 'test@example.com' });
 
-      const deleteManyOrder = (PasswordResetMock.deleteMany as jest.Mock).mock.invocationCallOrder[0];
+      const deleteManyOrder = (PasswordResetMock.deleteMany as jest.Mock).mock
+        .invocationCallOrder[0];
       const createOrder = (PasswordResetMock.create as jest.Mock).mock.invocationCallOrder[0];
       expect(deleteManyOrder).toBeLessThan(createOrder);
     });
@@ -134,7 +134,6 @@ describe('Password Management & Logout All', () => {
   // ════════════════════════════════════════════════════════
 
   describe('resetPassword', () => {
-
     it('should reset password with valid token', async () => {
       const user = mockUser();
       const resetRecord = {
@@ -164,10 +163,12 @@ describe('Password Management & Logout All', () => {
 
       await expect(
         authService.resetPassword({ token: 'invalid-token', password: 'NewPass123' }),
-      ).rejects.toThrow(expect.objectContaining({
-        statusCode: StatusCodes.BAD_REQUEST,
-        message: expect.stringContaining('AUTH_010'),
-      }));
+      ).rejects.toThrow(
+        expect.objectContaining({
+          statusCode: StatusCodes.BAD_REQUEST,
+          message: expect.stringContaining('AUTH_010'),
+        }),
+      );
     });
 
     it('should throw BadRequestError if token is expired', async () => {
@@ -182,10 +183,12 @@ describe('Password Management & Logout All', () => {
 
       await expect(
         authService.resetPassword({ token: 'expired-token', password: 'NewPass123' }),
-      ).rejects.toThrow(expect.objectContaining({
-        statusCode: StatusCodes.BAD_REQUEST,
-        message: expect.stringContaining('AUTH_010'),
-      }));
+      ).rejects.toThrow(
+        expect.objectContaining({
+          statusCode: StatusCodes.BAD_REQUEST,
+          message: expect.stringContaining('AUTH_010'),
+        }),
+      );
 
       expect(resetRecord.deleteOne).toHaveBeenCalled();
     });
@@ -215,11 +218,10 @@ describe('Password Management & Logout All', () => {
   // ════════════════════════════════════════════════════════
 
   describe('changePassword', () => {
-
     it('should change password when current password is correct', async () => {
       const user = mockUser();
       user.comparePassword
-        .mockResolvedValueOnce(true)  // currentPassword check
+        .mockResolvedValueOnce(true) // currentPassword check
         .mockResolvedValueOnce(false); // newPassword != currentPassword
 
       (UserMock.findById as jest.Mock).mockReturnValue({
@@ -249,10 +251,12 @@ describe('Password Management & Logout All', () => {
           currentPassword: 'WrongPass',
           newPassword: 'NewPass456',
         }),
-      ).rejects.toThrow(expect.objectContaining({
-        statusCode: StatusCodes.UNAUTHORIZED,
-        message: expect.stringContaining('AUTH_011'),
-      }));
+      ).rejects.toThrow(
+        expect.objectContaining({
+          statusCode: StatusCodes.UNAUTHORIZED,
+          message: expect.stringContaining('AUTH_011'),
+        }),
+      );
     });
 
     it('should throw BadRequestError if new password is same as current', async () => {
@@ -270,10 +274,12 @@ describe('Password Management & Logout All', () => {
           currentPassword: 'SamePass123',
           newPassword: 'SamePass123',
         }),
-      ).rejects.toThrow(expect.objectContaining({
-        statusCode: StatusCodes.BAD_REQUEST,
-        message: expect.stringContaining('AUTH_012'),
-      }));
+      ).rejects.toThrow(
+        expect.objectContaining({
+          statusCode: StatusCodes.BAD_REQUEST,
+          message: expect.stringContaining('AUTH_012'),
+        }),
+      );
     });
 
     it('should throw NotFoundError if user does not exist', async () => {
@@ -286,16 +292,16 @@ describe('Password Management & Logout All', () => {
           currentPassword: 'OldPass123',
           newPassword: 'NewPass456',
         }),
-      ).rejects.toThrow(expect.objectContaining({
-        statusCode: StatusCodes.NOT_FOUND,
-      }));
+      ).rejects.toThrow(
+        expect.objectContaining({
+          statusCode: StatusCodes.NOT_FOUND,
+        }),
+      );
     });
 
     it('should invalidate all sessions after password change', async () => {
       const user = mockUser();
-      user.comparePassword
-        .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce(false);
+      user.comparePassword.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
 
       (UserMock.findById as jest.Mock).mockReturnValue({
         select: jest.fn().mockResolvedValue(user),
@@ -315,7 +321,6 @@ describe('Password Management & Logout All', () => {
   // ════════════════════════════════════════════════════════
 
   describe('logoutAll', () => {
-
     it('should delete all refresh tokens for the user', async () => {
       await authService.logoutAll('507f1f77bcf86cd799439011');
 
@@ -327,9 +332,7 @@ describe('Password Management & Logout All', () => {
     it('should not throw even if user has no active sessions', async () => {
       (RefreshTokenMock.deleteMany as jest.Mock).mockResolvedValue({ deletedCount: 0 });
 
-      await expect(
-        authService.logoutAll('507f1f77bcf86cd799439011'),
-      ).resolves.not.toThrow();
+      await expect(authService.logoutAll('507f1f77bcf86cd799439011')).resolves.not.toThrow();
     });
   });
 });

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 import jwt from 'jsonwebtoken';
 import { AuthService } from '../auth.service';
 import { User } from '@modules/users/users.model';
@@ -104,7 +105,7 @@ describe('🔴 Security Attack Simulations', () => {
        * Attacker gửi: { "email": {"$ne": ""}, "password": "any" }
        * Mục đích: MongoDB query trở thành:
        *   User.findOne({ email: { $ne: "" } })  → trả về USER BẤT KỲ
-       * 
+       *
        * Phòng thủ: Zod z.string() REJECT object → validation fail TRƯỚC khi tới service
        */
       const { loginValidation } = require('../auth.validation');
@@ -150,7 +151,7 @@ describe('🔴 Security Attack Simulations', () => {
       /**
        * Attacker gửi: { "email": "victim@test.com", "password": {"$ne": ""} }
        * Mục đích: bypass password check bằng cách truyền object thay vì string
-       * 
+       *
        * Phòng thủ 2 lớp:
        *   1) Zod z.string() reject object → lỗi validation
        *   2) Ngay cả nếu bypass Zod, comparePassword() nhận object thay vì string
@@ -214,10 +215,10 @@ describe('🔴 Security Attack Simulations', () => {
       /**
        * Giả lập: attacker bằng cách nào đó bypass Zod validation
        * và truyền { $ne: "" } vào email.
-       * 
+       *
        * Test: service nhận giá trị đúng như chuỗi đã transform,
        * không phải object injection trực tiếp vào MongoDB query.
-       * 
+       *
        * Vì service gọi data.email.trim().toLowerCase() → nếu email
        * là object → TypeError ngay lập tức, không bao giờ tới findOne.
        */
@@ -263,7 +264,7 @@ describe('🔴 Security Attack Simulations', () => {
       /**
        * Dù project dùng MongoDB (không có SQL), hệ thống vẫn phải
        * xử lý các payload SQL injection như chuỗi bình thường.
-       * 
+       *
        * Mongoose luôn dùng parameterized query → payload chỉ là string.
        */
       const sqlPayloads = [
@@ -320,10 +321,12 @@ describe('🔴 Security Attack Simulations', () => {
     it('should reject token with "none" algorithm (alg: none attack)', () => {
       // Tạo token không có chữ ký — kỹ thuật tấn công cổ điển
       const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
-      const payload = Buffer.from(JSON.stringify({
-        userId: '507f1f77bcf86cd799439011',
-        role: 'admin',
-      })).toString('base64url');
+      const payload = Buffer.from(
+        JSON.stringify({
+          userId: '507f1f77bcf86cd799439011',
+          role: 'admin',
+        }),
+      ).toString('base64url');
       const forgedToken = `${header}.${payload}.`;
 
       const next = runMiddleware({
@@ -552,10 +555,26 @@ describe('🔴 Security Attack Simulations', () => {
 
       // Top 20 mật khẩu phổ biến nhất từ các vụ leak
       const top20Passwords = [
-        '123456', 'password', '123456789', '12345678', '12345',
-        '1234567', '1234567890', 'qwerty', 'abc123', 'million2',
-        '000000', '1234', 'iloveyou', 'aaron431', 'password1',
-        'qqww1122', '123', 'omgpop', '123321', '654321',
+        '123456',
+        'password',
+        '123456789',
+        '12345678',
+        '12345',
+        '1234567',
+        '1234567890',
+        'qwerty',
+        'abc123',
+        'million2',
+        '000000',
+        '1234',
+        'iloveyou',
+        'aaron431',
+        'password1',
+        'qqww1122',
+        '123',
+        'omgpop',
+        '123321',
+        '654321',
       ];
 
       const errors: any[] = [];
@@ -588,15 +607,30 @@ describe('🔴 Security Attack Simulations', () => {
       // Attacker thử vét cạn các pattern phổ biến
       const patterns = [
         // Số tuần tự
-        '000000', '111111', '222222', '333333', '999999',
+        '000000',
+        '111111',
+        '222222',
+        '333333',
+        '999999',
         // Bàn phím
-        'qwerty', 'asdfgh', 'zxcvbn', 'qazwsx',
+        'qwerty',
+        'asdfgh',
+        'zxcvbn',
+        'qazwsx',
         // Tên + số
-        'admin1', 'user123', 'test1234', 'root00',
+        'admin1',
+        'user123',
+        'test1234',
+        'root00',
         // Ngày tháng
-        '010101', '123456', '200000', '199999',
+        '010101',
+        '123456',
+        '200000',
+        '199999',
         // Lặp lại
-        'aaaaaa', 'abcabc', 'ababab',
+        'aaaaaa',
+        'abcabc',
+        'ababab',
       ];
 
       let rejectedCount = 0;

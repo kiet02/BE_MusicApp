@@ -50,17 +50,21 @@ app.use(compression());
 app.use(morgan('dev'));
 
 // ─── Swagger Documentation ───────────────────────────────────
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  explorer: true,
-  customCss: '.swagger-ui .topbar { display: none }',
-  customSiteTitle: 'API Documentation',
-  swaggerOptions: {
-    persistAuthorization: true,
-    docExpansion: 'list',
-    filter: true,
-    tagsSorter: 'alpha',
-  },
-}));
+app.use(
+  '/docs',
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, {
+    explorer: true,
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'API Documentation',
+    swaggerOptions: {
+      persistAuthorization: true,
+      docExpansion: 'list',
+      filter: true,
+      tagsSorter: 'alpha',
+    },
+  }),
+);
 
 // Swagger JSON endpoint
 app.get('/docs.json', (_req: Request, res: Response) => {

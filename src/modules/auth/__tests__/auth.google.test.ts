@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 import { AuthService } from '../auth.service';
 import { User } from '@modules/users/users.model';
 import { StatusCodes } from 'http-status-codes';
@@ -119,12 +120,12 @@ describe('Google Authentication', () => {
     const originalClientId = env.config.google.clientId;
     env.config.google.clientId = '';
 
-    await expect(
-      authService.loginWithGoogle({ idToken: 'some-token' }),
-    ).rejects.toThrow(expect.objectContaining({
-      statusCode: StatusCodes.BAD_REQUEST,
-      message: expect.stringContaining('AUTH_008'),
-    }));
+    await expect(authService.loginWithGoogle({ idToken: 'some-token' })).rejects.toThrow(
+      expect.objectContaining({
+        statusCode: StatusCodes.BAD_REQUEST,
+        message: expect.stringContaining('AUTH_008'),
+      }),
+    );
 
     env.config.google.clientId = originalClientId;
   });
@@ -132,12 +133,12 @@ describe('Google Authentication', () => {
   it('should throw UnauthorizedError (401) if idToken is invalid', async () => {
     verifyIdTokenMock.mockRejectedValue(new Error('Invalid token signature'));
 
-    await expect(
-      authService.loginWithGoogle({ idToken: 'invalid-token' }),
-    ).rejects.toThrow(expect.objectContaining({
-      statusCode: StatusCodes.UNAUTHORIZED,
-      message: expect.stringContaining('AUTH_007'),
-    }));
+    await expect(authService.loginWithGoogle({ idToken: 'invalid-token' })).rejects.toThrow(
+      expect.objectContaining({
+        statusCode: StatusCodes.UNAUTHORIZED,
+        message: expect.stringContaining('AUTH_007'),
+      }),
+    );
   });
 
   it('should throw UnauthorizedError (401) if user account is deactivated', async () => {
@@ -152,12 +153,12 @@ describe('Google Authentication', () => {
     const user = mockUser({ email: 'deactivated@test.com', isActive: false });
     (UserMock.findOne as jest.Mock).mockResolvedValue(user);
 
-    await expect(
-      authService.loginWithGoogle({ idToken: 'valid-token' }),
-    ).rejects.toThrow(expect.objectContaining({
-      statusCode: StatusCodes.UNAUTHORIZED,
-      message: expect.stringContaining('AUTH_003'),
-    }));
+    await expect(authService.loginWithGoogle({ idToken: 'valid-token' })).rejects.toThrow(
+      expect.objectContaining({
+        statusCode: StatusCodes.UNAUTHORIZED,
+        message: expect.stringContaining('AUTH_003'),
+      }),
+    );
   });
 
   describe('Google Access Token (ya29.) verification', () => {
@@ -190,7 +191,7 @@ describe('Google Authentication', () => {
       });
 
       expect(global.fetch).toHaveBeenCalledWith(
-        'https://www.googleapis.com/oauth2/v3/userinfo?access_token=ya29.valid-access-token'
+        'https://www.googleapis.com/oauth2/v3/userinfo?access_token=ya29.valid-access-token',
       );
       expect(result.user.email).toBe('access-token-user@test.com');
       expect(result.accessToken).toBeDefined();
@@ -203,10 +204,12 @@ describe('Google Authentication', () => {
 
       await expect(
         authService.loginWithGoogle({ idToken: 'ya29.invalid-access-token' }),
-      ).rejects.toThrow(expect.objectContaining({
-        statusCode: StatusCodes.UNAUTHORIZED,
-        message: expect.stringContaining('AUTH_007'),
-      }));
+      ).rejects.toThrow(
+        expect.objectContaining({
+          statusCode: StatusCodes.UNAUTHORIZED,
+          message: expect.stringContaining('AUTH_007'),
+        }),
+      );
     });
   });
 
@@ -242,7 +245,7 @@ describe('Google Authentication', () => {
       expect(verifyIdTokenMock).toHaveBeenCalledWith(
         expect.objectContaining({
           audience: mockClientId,
-        })
+        }),
       );
     });
 
@@ -263,7 +266,9 @@ describe('Google Authentication', () => {
       await authService.loginWithGoogle({ idToken: maliciousToken });
 
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('https://www.googleapis.com/oauth2/v3/userinfo?access_token=ya29.attacker-token')
+        expect.stringContaining(
+          'https://www.googleapis.com/oauth2/v3/userinfo?access_token=ya29.attacker-token',
+        ),
       );
     });
 
@@ -294,9 +299,7 @@ describe('Google Authentication', () => {
     it('should throw an error and reject object payload to prevent NoSQL injection', async () => {
       const maliciousPayload = { $ne: '' } as any;
 
-      await expect(
-        authService.loginWithGoogle({ idToken: maliciousPayload }),
-      ).rejects.toThrow();
+      await expect(authService.loginWithGoogle({ idToken: maliciousPayload })).rejects.toThrow();
     });
   });
 
@@ -306,20 +309,17 @@ describe('Google Authentication', () => {
   // ══════════════════════════════════════════════════════════════
 
   describe('🔓 Vuln #1: Improper Token Validation', () => {
-
     it('should VERIFY signature, not just DECODE — tampered token must be rejected', async () => {
       // Hacker decode ID Token, sửa email thành victim, encode lại
       // => verifyIdToken phải reject vì chữ ký số không khớp
-      verifyIdTokenMock.mockRejectedValue(
-        new Error('Invalid token signature')
-      );
+      verifyIdTokenMock.mockRejectedValue(new Error('Invalid token signature'));
 
-      await expect(
-        authService.loginWithGoogle({ idToken: 'tampered.jwt.token' }),
-      ).rejects.toThrow(expect.objectContaining({
-        statusCode: StatusCodes.UNAUTHORIZED,
-        message: expect.stringContaining('AUTH_007'),
-      }));
+      await expect(authService.loginWithGoogle({ idToken: 'tampered.jwt.token' })).rejects.toThrow(
+        expect.objectContaining({
+          statusCode: StatusCodes.UNAUTHORIZED,
+          message: expect.stringContaining('AUTH_007'),
+        }),
+      );
     });
 
     it('should enforce audience check — token from another app must be rejected (Confused Deputy)', async () => {
@@ -342,9 +342,11 @@ describe('Google Authentication', () => {
       // Với audience đúng -> verifyIdToken PHẢI reject token từ app khác
       await expect(
         authService.loginWithGoogle({ idToken: 'valid-google-token-wrong-audience' }),
-      ).rejects.toThrow(expect.objectContaining({
-        statusCode: StatusCodes.UNAUTHORIZED,
-      }));
+      ).rejects.toThrow(
+        expect.objectContaining({
+          statusCode: StatusCodes.UNAUTHORIZED,
+        }),
+      );
     });
 
     it('should ALWAYS pass audience to verifyIdToken — never call without it', async () => {
@@ -363,7 +365,7 @@ describe('Google Authentication', () => {
       expect(verifyIdTokenMock).toHaveBeenCalledWith(
         expect.objectContaining({
           audience: mockClientId,
-        })
+        }),
       );
     });
 
@@ -376,9 +378,11 @@ describe('Google Authentication', () => {
 
       await expect(
         authService.loginWithGoogle({ idToken: 'ya29.stolen-or-expired-token' }),
-      ).rejects.toThrow(expect.objectContaining({
-        statusCode: StatusCodes.UNAUTHORIZED,
-      }));
+      ).rejects.toThrow(
+        expect.objectContaining({
+          statusCode: StatusCodes.UNAUTHORIZED,
+        }),
+      );
 
       global.fetch = originalFetch;
     });
@@ -390,7 +394,6 @@ describe('Google Authentication', () => {
   // ══════════════════════════════════════════════════════════════
 
   describe('🔓 Vuln #2: Account Takeover via Unverified Email', () => {
-
     it('should reject ID Token with email_verified=false', async () => {
       // Hacker tạo tài khoản Google/Facebook với email chưa xác minh
       // để chiếm tài khoản có sẵn trong hệ thống
@@ -404,10 +407,12 @@ describe('Google Authentication', () => {
 
       await expect(
         authService.loginWithGoogle({ idToken: 'token-with-unverified-email' }),
-      ).rejects.toThrow(expect.objectContaining({
-        statusCode: StatusCodes.UNAUTHORIZED,
-        message: expect.stringContaining('AUTH_009'),
-      }));
+      ).rejects.toThrow(
+        expect.objectContaining({
+          statusCode: StatusCodes.UNAUTHORIZED,
+          message: expect.stringContaining('AUTH_009'),
+        }),
+      );
 
       // QUAN TRỌNG: Không được tạo user hay merge account
       expect(UserMock.findOne).not.toHaveBeenCalled();
@@ -427,10 +432,12 @@ describe('Google Authentication', () => {
 
       await expect(
         authService.loginWithGoogle({ idToken: 'ya29.unverified-email-token' }),
-      ).rejects.toThrow(expect.objectContaining({
-        statusCode: StatusCodes.UNAUTHORIZED,
-        message: expect.stringContaining('AUTH_009'),
-      }));
+      ).rejects.toThrow(
+        expect.objectContaining({
+          statusCode: StatusCodes.UNAUTHORIZED,
+          message: expect.stringContaining('AUTH_009'),
+        }),
+      );
 
       expect(UserMock.findOne).not.toHaveBeenCalled();
       global.fetch = originalFetch;
@@ -447,9 +454,11 @@ describe('Google Authentication', () => {
 
       await expect(
         authService.loginWithGoogle({ idToken: 'token-without-verified-field' }),
-      ).rejects.toThrow(expect.objectContaining({
-        statusCode: StatusCodes.UNAUTHORIZED,
-      }));
+      ).rejects.toThrow(
+        expect.objectContaining({
+          statusCode: StatusCodes.UNAUTHORIZED,
+        }),
+      );
     });
 
     it('should accept only when email_verified is strictly true', async () => {
@@ -461,9 +470,7 @@ describe('Google Authentication', () => {
         }),
       });
 
-      (UserMock.findOne as jest.Mock).mockResolvedValue(
-        mockUser({ email: 'safe@gmail.com' })
-      );
+      (UserMock.findOne as jest.Mock).mockResolvedValue(mockUser({ email: 'safe@gmail.com' }));
 
       const result = await authService.loginWithGoogle({ idToken: 'verified-token' });
       expect(result.user.email).toBe('safe@gmail.com');
@@ -476,7 +483,6 @@ describe('Google Authentication', () => {
   // ══════════════════════════════════════════════════════════════
 
   describe('🔓 Vuln #3: CSRF Account Linking Prevention', () => {
-
     it('should NOT have any account linking endpoint that accepts OAuth callback without state parameter', () => {
       /**
        * Thiết kế hiện tại KHÔNG CÓ luồng callback/redirect:
@@ -519,7 +525,6 @@ describe('Google Authentication', () => {
   // ══════════════════════════════════════════════════════════════
 
   describe('🔓 Vuln #4: Token Leakage Prevention', () => {
-
     it('should return tokens in response body, never redirect with token in URL', async () => {
       verifyIdTokenMock.mockResolvedValue({
         getPayload: () => ({
@@ -529,9 +534,7 @@ describe('Google Authentication', () => {
         }),
       });
 
-      (UserMock.findOne as jest.Mock).mockResolvedValue(
-        mockUser({ email: 'user@test.com' })
-      );
+      (UserMock.findOne as jest.Mock).mockResolvedValue(mockUser({ email: 'user@test.com' }));
 
       const result = await authService.loginWithGoogle({ idToken: 'valid-token' });
 
@@ -555,9 +558,7 @@ describe('Google Authentication', () => {
         }),
       });
 
-      (UserMock.findOne as jest.Mock).mockResolvedValue(
-        mockUser({ email: 'user@test.com' })
-      );
+      (UserMock.findOne as jest.Mock).mockResolvedValue(mockUser({ email: 'user@test.com' }));
 
       const result = await authService.loginWithGoogle({ idToken: 'google-id-token-secret' });
 
@@ -568,7 +569,7 @@ describe('Google Authentication', () => {
 
       // Chỉ trả về token của HỆ THỐNG, không trả lại token Google
       expect(Object.keys(result)).toEqual(
-        expect.arrayContaining(['user', 'accessToken', 'refreshToken'])
+        expect.arrayContaining(['user', 'accessToken', 'refreshToken']),
       );
     });
   });

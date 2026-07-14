@@ -3,12 +3,22 @@ import crypto from 'crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { User, IUser } from '@modules/users/users.model';
 import {
-  RegisterDto, LoginDto, RefreshTokenDto, GoogleLoginDto,
-  ForgotPasswordDto, ResetPasswordDto, ChangePasswordDto,
+  RegisterDto,
+  LoginDto,
+  RefreshTokenDto,
+  GoogleLoginDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+  ChangePasswordDto,
   AuthResponseDto,
 } from './auth.dto';
 import { config } from '@shared/config/env';
-import { UnauthorizedError, ConflictError, NotFoundError, BadRequestError } from '@shared/utils/api-error';
+import {
+  UnauthorizedError,
+  ConflictError,
+  NotFoundError,
+  BadRequestError,
+} from '@shared/utils/api-error';
 import { AUTH_ERRORS } from './auth.code';
 import { RefreshToken, generateRefreshTokenString, parseDuration } from './refresh-token.model';
 import { PasswordReset, generateResetToken, hashToken } from './password-reset.model';
@@ -83,7 +93,9 @@ export class AuthService {
 
     if (token.startsWith('ya29.')) {
       try {
-        const response = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${token}`);
+        const response = await fetch(
+          `https://www.googleapis.com/oauth2/v3/userinfo?access_token=${token}`,
+        );
         if (!response.ok) {
           throw new Error('Google userinfo fetch failed');
         }
@@ -247,11 +259,9 @@ export class AuthService {
   }
 
   private generateAccessToken(userId: string, role: string): string {
-    return jwt.sign(
-      { userId, role },
-      config.jwt.secret,
-      { expiresIn: config.jwt.expiresIn } as jwt.SignOptions,
-    );
+    return jwt.sign({ userId, role }, config.jwt.secret, {
+      expiresIn: config.jwt.expiresIn,
+    } as jwt.SignOptions);
   }
 
   private async createRefreshToken(userId: string): Promise<string> {
