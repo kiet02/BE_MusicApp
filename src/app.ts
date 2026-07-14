@@ -19,7 +19,7 @@ import usersRoutes from '@modules/users/users.routes';
 const app = express();
 
 // ─── Security ────────────────────────────────────────────────
-app.use(helmet());
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(
   cors({
     origin: '*', // Configure based on your needs
