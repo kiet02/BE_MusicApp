@@ -63,6 +63,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Kích hoạt Render Deploy
+        run: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
       # - name: Deploy to Server via SSH
       #   uses: appleboy/ssh-action@v1.0.3
       #   with:
