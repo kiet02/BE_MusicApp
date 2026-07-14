@@ -8,6 +8,19 @@ import { User } from '@modules/users/users.model';
 
 // ─── Mock Dependencies ──────────────────────────────────────
 
+jest.mock('mongoose', () => {
+  const actual = jest.requireActual('mongoose');
+  return {
+    ...actual,
+    startSession: jest.fn().mockResolvedValue({
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      abortTransaction: jest.fn(),
+      endSession: jest.fn(),
+    }),
+  };
+});
+
 jest.mock('@modules/users/users.model');
 jest.mock('../refresh-token.model', () => {
   const actual = jest.requireActual('../refresh-token.model');
@@ -55,11 +68,12 @@ const expectApiError = async (
   try {
     await fn();
     fail('Expected error to be thrown');
-  } catch (e: any) {
+  } catch (e: unknown) {
     expect(e).toBeInstanceOf(ApiError);
-    expect(e.statusCode).toBe(statusCode);
+    const apiError = e as ApiError;
+    expect(apiError.statusCode).toBe(statusCode);
     if (messageSubstring) {
-      expect(e.message).toContain(messageSubstring);
+      expect(apiError.message).toContain(messageSubstring);
     }
   }
 };
@@ -81,7 +95,7 @@ describe('AuthService', () => {
     it('should register and return accessToken + refreshToken', async () => {
       const user = mockUser();
       (UserMock.findOne as jest.Mock).mockResolvedValue(null);
-      (UserMock.create as jest.Mock).mockResolvedValue(user);
+      (UserMock.create as jest.Mock).mockResolvedValue([user]);
 
       const result = await authService.register({
         name: 'Test User',
@@ -97,17 +111,20 @@ describe('AuthService', () => {
       expect(typeof result.refreshToken).toBe('string');
       // Refresh token stored in DB
       expect(RefreshTokenMock.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: '507f1f77bcf86cd799439011',
-          token: expect.any(String),
-          expiresAt: expect.any(Date),
-        }),
+        [
+          expect.objectContaining({
+            userId: '507f1f77bcf86cd799439011',
+            token: expect.any(String),
+            expiresAt: expect.any(Date),
+          }),
+        ],
+        expect.objectContaining({ session: expect.anything() }),
       );
     });
 
     it('should normalise email before querying', async () => {
       (UserMock.findOne as jest.Mock).mockResolvedValue(null);
-      (UserMock.create as jest.Mock).mockResolvedValue(mockUser());
+      (UserMock.create as jest.Mock).mockResolvedValue([mockUser()]);
 
       await authService.register({
         name: 'Test',
@@ -135,7 +152,7 @@ describe('AuthService', () => {
 
     it('should generate accessToken with userId and role only (no email)', async () => {
       (UserMock.findOne as jest.Mock).mockResolvedValue(null);
-      (UserMock.create as jest.Mock).mockResolvedValue(mockUser());
+      (UserMock.create as jest.Mock).mockResolvedValue([mockUser()]);
 
       const result = await authService.register({
         name: 'Test',
@@ -213,8 +230,8 @@ describe('AuthService', () => {
       selectMock.mockResolvedValue(null);
       try {
         await authService.login({ email: 'wrong@test.com', password: 'any' });
-      } catch (e: any) {
-        expect(e.message).toBe(AUTH_ERRORS.INVALID_CREDENTIALS);
+      } catch (e: unknown) {
+        expect((e as Error).message).toBe(AUTH_ERRORS.INVALID_CREDENTIALS);
       }
 
       // Wrong password
@@ -223,8 +240,8 @@ describe('AuthService', () => {
       selectMock.mockResolvedValue(user);
       try {
         await authService.login({ email: 'test@example.com', password: 'wrong' });
-      } catch (e: any) {
-        expect(e.message).toBe(AUTH_ERRORS.INVALID_CREDENTIALS);
+      } catch (e: unknown) {
+        expect((e as Error).message).toBe(AUTH_ERRORS.INVALID_CREDENTIALS);
       }
     });
   });

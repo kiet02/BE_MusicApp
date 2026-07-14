@@ -3,9 +3,9 @@ import { StatusCodes } from 'http-status-codes';
 export class ApiError extends Error {
   public readonly statusCode: number;
   public readonly isOperational: boolean;
-  public readonly error?: any;
+  public readonly error?: unknown;
 
-  constructor(statusCode: number, message: string, isOperational = true, error?: any) {
+  constructor(statusCode: number, message: string, isOperational = true, error?: unknown) {
     super(message);
     this.statusCode = statusCode;
     this.isOperational = isOperational;
@@ -34,7 +34,7 @@ export class ForbiddenError extends ApiError {
 }
 
 export class BadRequestError extends ApiError {
-  constructor(message = 'Bad request', error?: any) {
+  constructor(message = 'Bad request', error?: unknown) {
     super(StatusCodes.BAD_REQUEST, message, true, error);
   }
 }

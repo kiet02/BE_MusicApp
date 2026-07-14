@@ -3,6 +3,19 @@ import { AuthService } from '../auth.service';
 import { User } from '@modules/users/users.model';
 import { StatusCodes } from 'http-status-codes';
 
+jest.mock('mongoose', () => {
+  const actual = jest.requireActual('mongoose');
+  return {
+    ...actual,
+    startSession: jest.fn().mockResolvedValue({
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      abortTransaction: jest.fn(),
+      endSession: jest.fn(),
+    }),
+  };
+});
+
 jest.mock('@modules/users/users.model');
 jest.mock('../refresh-token.model', () => {
   const actual = jest.requireActual('../refresh-token.model');
@@ -98,18 +111,21 @@ describe('Google Authentication', () => {
 
     (UserMock.findOne as jest.Mock).mockResolvedValue(null);
     const user = mockUser({ email: 'newgoogle@test.com', name: 'New Google User' });
-    (UserMock.create as jest.Mock).mockResolvedValue(user);
+    (UserMock.create as jest.Mock).mockResolvedValue([user]);
 
     const result = await authService.loginWithGoogle({ idToken: 'valid-id-token' });
 
     expect(UserMock.findOne).toHaveBeenCalledWith({ email: 'newgoogle@test.com' });
     expect(UserMock.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        email: 'newgoogle@test.com',
-        name: 'New Google User',
-        password: expect.any(String),
-        role: 'user',
-      }),
+      [
+        expect.objectContaining({
+          email: 'newgoogle@test.com',
+          name: 'New Google User',
+          password: expect.any(String),
+          role: 'user',
+        }),
+      ],
+      expect.objectContaining({ session: expect.anything() }),
     );
     expect(result.user.email).toBe('newgoogle@test.com');
     expect(result.accessToken).toBeDefined();
@@ -180,11 +196,11 @@ describe('Google Authentication', () => {
           email_verified: true,
           name: 'Access Token User',
         }),
-      } as any);
+      });
 
       (UserMock.findOne as jest.Mock).mockResolvedValue(null);
       const user = mockUser({ email: 'access-token-user@test.com', name: 'Access Token User' });
-      (UserMock.create as jest.Mock).mockResolvedValue(user);
+      (UserMock.create as jest.Mock).mockResolvedValue([user]);
 
       const result = await authService.loginWithGoogle({
         idToken: 'ya29.valid-access-token',
@@ -200,7 +216,7 @@ describe('Google Authentication', () => {
     it('should throw UnauthorizedError (401) if Access Token verification fails', async () => {
       global.fetch = jest.fn().mockResolvedValue({
         ok: false,
-      } as any);
+      });
 
       await expect(
         authService.loginWithGoogle({ idToken: 'ya29.invalid-access-token' }),
@@ -225,7 +241,7 @@ describe('Google Authentication', () => {
     });
 
     it('should reject ID token if the audience does not match our Client ID (Audience Replay Attack)', async () => {
-      verifyIdTokenMock.mockImplementation(({ audience }: any) => {
+      verifyIdTokenMock.mockImplementation(({ audience }: { audience: string }) => {
         if (audience !== mockClientId) {
           return Promise.reject(new Error('Wrong audience'));
         }
@@ -259,7 +275,7 @@ describe('Google Authentication', () => {
           email_verified: true,
           name: 'Injected User',
         }),
-      } as any);
+      });
 
       (UserMock.findOne as jest.Mock).mockResolvedValue(mockUser({ email: 'injected@test.com' }));
 
@@ -284,9 +300,9 @@ describe('Google Authentication', () => {
       (UserMock.findOne as jest.Mock).mockResolvedValue(null);
 
       let createdPassword = '';
-      (UserMock.create as jest.Mock).mockImplementation(async (data: any) => {
-        createdPassword = data.password;
-        return mockUser(data);
+      (UserMock.create as jest.Mock).mockImplementation(async (data: { password: string }[]) => {
+        createdPassword = data[0].password;
+        return [mockUser(data[0])];
       });
 
       await authService.loginWithGoogle({ idToken: 'valid-id-token' });
@@ -297,9 +313,10 @@ describe('Google Authentication', () => {
     });
 
     it('should throw an error and reject object payload to prevent NoSQL injection', async () => {
-      const maliciousPayload = { $ne: '' } as any;
-
-      await expect(authService.loginWithGoogle({ idToken: maliciousPayload })).rejects.toThrow();
+      // Type guard sẽ reject object → validation fail trước khi tới service
+      await expect(
+        authService.loginWithGoogle({ idToken: { $ne: '' } as unknown as string }),
+      ).rejects.toThrow();
     });
   });
 
@@ -325,7 +342,7 @@ describe('Google Authentication', () => {
     it('should enforce audience check — token from another app must be rejected (Confused Deputy)', async () => {
       // Hacker tạo app Google riêng, lừa victim đăng nhập lấy token
       // Token hợp lệ (Google ký) nhưng audience = client_id_app_hacker
-      verifyIdTokenMock.mockImplementation(({ audience }: any) => {
+      verifyIdTokenMock.mockImplementation(({ audience }: { audience: string }) => {
         // Giả lập: Google library kiểm tra audience != our client_id => reject
         if (audience === mockClientId) {
           throw new Error('Token audience mismatch');
@@ -374,7 +391,7 @@ describe('Google Authentication', () => {
       global.fetch = jest.fn().mockResolvedValue({
         ok: false,
         status: 401,
-      } as any);
+      } as unknown as Response);
 
       await expect(
         authService.loginWithGoogle({ idToken: 'ya29.stolen-or-expired-token' }),
@@ -428,7 +445,7 @@ describe('Google Authentication', () => {
           email_verified: false, // Chưa xác minh!
           name: 'Hacker via Access Token',
         }),
-      } as any);
+      });
 
       await expect(
         authService.loginWithGoogle({ idToken: 'ya29.unverified-email-token' }),

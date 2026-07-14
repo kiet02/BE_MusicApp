@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import mongoose, { ClientSession } from 'mongoose';
 import { OAuth2Client } from 'google-auth-library';
 import { User, IUser } from '@modules/users/users.model';
 import {
@@ -22,6 +23,7 @@ import {
 import { AUTH_ERRORS } from './auth.code';
 import { RefreshToken, generateRefreshTokenString, parseDuration } from './refresh-token.model';
 import { PasswordReset, generateResetToken, hashToken } from './password-reset.model';
+import { logger } from '@shared/utils/logger';
 
 export class AuthService {
   async register(data: RegisterDto): Promise<AuthResponseDto> {
@@ -29,16 +31,37 @@ export class AuthService {
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
+      logger.warn(`Register attempt with existing email: ${email}`);
       throw new ConflictError(AUTH_ERRORS.EMAIL_ALREADY_REGISTERED);
     }
 
-    const user = await User.create({
-      name: data.name,
-      email,
-      password: data.password,
-    });
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    return this.createAuthResponse(user);
+    try {
+      const [user] = await User.create(
+        [
+          {
+            name: data.name,
+            email,
+            password: data.password,
+          },
+        ],
+        { session },
+      );
+
+      const response = await this.createAuthResponse(user, session);
+      await session.commitTransaction();
+
+      logger.info(`User registered successfully: ${email}`);
+      return response;
+    } catch (error) {
+      await session.abortTransaction();
+      logger.error(`Registration failed for ${email}:`, error);
+      throw error;
+    } finally {
+      session.endSession();
+    }
   }
 
   async login(data: LoginDto): Promise<AuthResponseDto> {
@@ -47,18 +70,22 @@ export class AuthService {
     const user = await User.findOne({ email }).select('+password');
 
     if (!user) {
+      logger.warn(`Failed login attempt (user not found): ${email}`);
       throw new UnauthorizedError(AUTH_ERRORS.INVALID_CREDENTIALS);
     }
 
     if (!user.isActive) {
+      logger.warn(`Failed login attempt (deactivated account): ${email}`);
       throw new UnauthorizedError(AUTH_ERRORS.ACCOUNT_DEACTIVATED);
     }
 
     const isPasswordMatch = await user.comparePassword(data.password);
     if (!isPasswordMatch) {
+      logger.warn(`Failed login attempt (wrong password): ${email}`);
       throw new UnauthorizedError(AUTH_ERRORS.INVALID_CREDENTIALS);
     }
 
+    logger.info(`User logged in successfully: ${email}`);
     return this.createAuthResponse(user);
   }
 
@@ -67,22 +94,26 @@ export class AuthService {
 
     if (!storedToken || storedToken.expiresAt < new Date()) {
       if (storedToken) await storedToken.deleteOne();
+      logger.warn('Failed token refresh (invalid or expired refresh token)');
       throw new UnauthorizedError(AUTH_ERRORS.INVALID_REFRESH_TOKEN);
     }
 
     const user = await User.findById(storedToken.userId);
     if (!user || !user.isActive) {
       await storedToken.deleteOne();
+      logger.warn(`Failed token refresh (user not found or deactivated): ${storedToken.userId}`);
       throw new UnauthorizedError(AUTH_ERRORS.INVALID_REFRESH_TOKEN);
     }
 
     await storedToken.deleteOne();
 
+    logger.info(`Token refreshed successfully for user: ${user.email}`);
     return this.createAuthResponse(user);
   }
 
   async logout(refreshToken: string): Promise<void> {
     await RefreshToken.deleteOne({ token: refreshToken });
+    logger.info('User logged out');
   }
 
   async loginWithGoogle(data: GoogleLoginDto): Promise<AuthResponseDto> {
@@ -99,7 +130,11 @@ export class AuthService {
         if (!response.ok) {
           throw new Error('Google userinfo fetch failed');
         }
-        const payload: any = await response.json();
+        const payload = (await response.json()) as {
+          email?: string;
+          email_verified?: boolean;
+          name?: string;
+        };
         if (!payload || !payload.email) {
           throw new UnauthorizedError(AUTH_ERRORS.INVALID_GOOGLE_TOKEN);
         }
@@ -108,8 +143,9 @@ export class AuthService {
         }
         email = payload.email.toLowerCase().trim();
         name = payload.name || 'Google User';
-      } catch (error: any) {
-        if (error?.statusCode) throw error;
+      } catch (error: unknown) {
+        if ((error as { statusCode?: number })?.statusCode) throw error;
+        logger.warn('Failed Google login (Invalid Google ID Token)');
         throw new UnauthorizedError(AUTH_ERRORS.INVALID_GOOGLE_TOKEN);
       }
     } else {
@@ -132,25 +168,50 @@ export class AuthService {
         }
         email = payload.email.toLowerCase().trim();
         name = payload.name || 'Google User';
-      } catch (error: any) {
-        if (error?.statusCode) throw error;
+      } catch (error: unknown) {
+        if ((error as { statusCode?: number })?.statusCode) throw error;
+        logger.warn('Failed Google login (Invalid Google ID Token verification)');
         throw new UnauthorizedError(AUTH_ERRORS.INVALID_GOOGLE_TOKEN);
       }
     }
 
     let user = await User.findOne({ email });
     if (!user) {
-      const randomPassword = crypto.randomBytes(32).toString('hex') + 'A1!';
-      user = await User.create({
-        name,
-        email,
-        password: randomPassword,
-        role: 'user',
-      });
+      const session = await mongoose.startSession();
+      session.startTransaction();
+      try {
+        const randomPassword = crypto.randomBytes(32).toString('hex') + 'A1!';
+        const [newUser] = await User.create(
+          [
+            {
+              name,
+              email,
+              password: randomPassword,
+              role: 'user',
+            },
+          ],
+          { session },
+        );
+        user = newUser;
+
+        const response = await this.createAuthResponse(user, session);
+        await session.commitTransaction();
+
+        logger.info(`New user registered via Google: ${email}`);
+        return response;
+      } catch (error) {
+        await session.abortTransaction();
+        logger.error(`Google registration failed for ${email}:`, error);
+        throw error;
+      } finally {
+        session.endSession();
+      }
     } else if (!user.isActive) {
+      logger.warn(`Failed Google login attempt (deactivated account): ${email}`);
       throw new UnauthorizedError(AUTH_ERRORS.ACCOUNT_DEACTIVATED);
     }
 
+    logger.info(`User logged in via Google: ${email}`);
     return this.createAuthResponse(user);
   }
 
@@ -167,24 +228,46 @@ export class AuthService {
     const user = await User.findOne({ email });
 
     // Luôn trả về thành công để chống User Enumeration
-    if (!user) return null;
+    if (!user) {
+      logger.warn(`Forgot password requested for non-existent email: ${email}`);
+      return null;
+    }
 
-    // Xóa tất cả reset token cũ của user
-    await PasswordReset.deleteMany({ userId: user._id });
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    // Tạo token mới
-    const { plainToken, hashedToken } = generateResetToken();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 phút
+    try {
+      // Xóa tất cả reset token cũ của user
+      await PasswordReset.deleteMany({ userId: user._id }, { session });
 
-    await PasswordReset.create({
-      token: hashedToken,
-      userId: user._id,
-      expiresAt,
-    });
+      // Tạo token mới
+      const { plainToken, hashedToken } = generateResetToken();
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 phút
 
-    // TODO: Gửi email chứa plainToken cho user
-    // Tạm thời trả về token để test
-    return { resetToken: plainToken };
+      await PasswordReset.create(
+        [
+          {
+            token: hashedToken,
+            userId: user._id,
+            expiresAt,
+          },
+        ],
+        { session },
+      );
+
+      await session.commitTransaction();
+      logger.info(`Password reset requested for user: ${user.email}`);
+
+      // TODO: Gửi email chứa plainToken cho user
+      // Tạm thời trả về token để test
+      return { resetToken: plainToken };
+    } catch (error) {
+      await session.abortTransaction();
+      logger.error(`Forgot password flow failed for ${email}:`, error);
+      throw error;
+    } finally {
+      session.endSession();
+    }
   }
 
   async resetPassword(data: ResetPasswordDto): Promise<void> {
@@ -193,22 +276,38 @@ export class AuthService {
     const resetRecord = await PasswordReset.findOne({ token: hashedToken });
     if (!resetRecord || resetRecord.expiresAt < new Date()) {
       if (resetRecord) await resetRecord.deleteOne();
+      logger.warn('Failed password reset attempt (invalid or expired token)');
       throw new BadRequestError(AUTH_ERRORS.RESET_TOKEN_INVALID);
     }
 
     const user = await User.findById(resetRecord.userId).select('+password');
     if (!user) {
       await resetRecord.deleteOne();
+      logger.warn('Failed password reset attempt (user not found from token)');
       throw new BadRequestError(AUTH_ERRORS.RESET_TOKEN_INVALID);
     }
 
-    // Cập nhật mật khẩu (pre-save hook sẽ hash bằng bcrypt)
-    user.password = data.password;
-    await user.save();
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    // Xóa tất cả reset tokens + refresh tokens (đá ra mọi thiết bị)
-    await PasswordReset.deleteMany({ userId: user._id });
-    await RefreshToken.deleteMany({ userId: user._id });
+    try {
+      // Cập nhật mật khẩu (pre-save hook sẽ hash bằng bcrypt)
+      user.password = data.password;
+      await user.save({ session });
+
+      // Xóa tất cả reset tokens + refresh tokens (đá ra mọi thiết bị)
+      await PasswordReset.deleteMany({ userId: user._id }, { session });
+      await RefreshToken.deleteMany({ userId: user._id }, { session });
+
+      await session.commitTransaction();
+      logger.info(`Password reset successfully for user: ${user.email}`);
+    } catch (error) {
+      await session.abortTransaction();
+      logger.error(`Password reset failed for user ${user.email}:`, error);
+      throw error;
+    } finally {
+      session.endSession();
+    }
   }
 
   async changePassword(userId: string, data: ChangePasswordDto): Promise<void> {
@@ -219,6 +318,7 @@ export class AuthService {
 
     const isMatch = await user.comparePassword(data.currentPassword);
     if (!isMatch) {
+      logger.warn(`Failed change password attempt (wrong current password): ${user.email}`);
       throw new UnauthorizedError(AUTH_ERRORS.WRONG_CURRENT_PASSWORD);
     }
 
@@ -228,23 +328,38 @@ export class AuthService {
       throw new BadRequestError(AUTH_ERRORS.SAME_PASSWORD);
     }
 
-    user.password = data.newPassword;
-    await user.save();
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    // Xóa tất cả refresh tokens (buộc đăng nhập lại trên mọi thiết bị)
-    await RefreshToken.deleteMany({ userId: user._id });
+    try {
+      user.password = data.newPassword;
+      await user.save({ session });
+
+      // Xóa tất cả refresh tokens (buộc đăng nhập lại trên mọi thiết bị)
+      await RefreshToken.deleteMany({ userId: user._id }, { session });
+
+      await session.commitTransaction();
+      logger.info(`Password changed successfully for user: ${user.email}`);
+    } catch (error) {
+      await session.abortTransaction();
+      logger.error(`Password change failed for user ${user.email}:`, error);
+      throw error;
+    } finally {
+      session.endSession();
+    }
   }
 
   async logoutAll(userId: string): Promise<void> {
     await RefreshToken.deleteMany({ userId });
+    logger.info(`User logged out from all devices: ${userId}`);
   }
 
   // ─── Private Helpers ─────────────────────────────────────────
 
-  private async createAuthResponse(user: IUser): Promise<AuthResponseDto> {
+  private async createAuthResponse(user: IUser, session?: ClientSession): Promise<AuthResponseDto> {
     const userId = String(user._id);
     const accessToken = this.generateAccessToken(userId, user.role);
-    const refreshToken = await this.createRefreshToken(userId);
+    const refreshToken = await this.createRefreshToken(userId, session);
 
     return {
       user: {
@@ -264,11 +379,15 @@ export class AuthService {
     } as jwt.SignOptions);
   }
 
-  private async createRefreshToken(userId: string): Promise<string> {
+  private async createRefreshToken(userId: string, session?: ClientSession): Promise<string> {
     const token = generateRefreshTokenString();
     const expiresAt = new Date(Date.now() + parseDuration(config.jwt.refreshExpiresIn));
 
-    await RefreshToken.create({ token, userId, expiresAt });
+    if (session) {
+      await RefreshToken.create([{ token, userId, expiresAt }], { session });
+    } else {
+      await RefreshToken.create({ token, userId, expiresAt });
+    }
 
     return token;
   }

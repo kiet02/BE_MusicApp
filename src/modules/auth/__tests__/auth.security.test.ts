@@ -17,6 +17,19 @@ import { Request, Response, NextFunction } from 'express';
 
 // ─── Mock Dependencies ──────────────────────────────────────
 
+jest.mock('mongoose', () => {
+  const actual = jest.requireActual('mongoose');
+  return {
+    ...actual,
+    startSession: jest.fn().mockResolvedValue({
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      abortTransaction: jest.fn(),
+      endSession: jest.fn(),
+    }),
+  };
+});
+
 jest.mock('@modules/users/users.model');
 jest.mock('../refresh-token.model', () => {
   const actual = jest.requireActual('../refresh-token.model');
@@ -57,11 +70,6 @@ const mockUser = (overrides = {}) => ({
   role: 'user',
   isActive: true,
   comparePassword: jest.fn().mockResolvedValue(true),
-  ...overrides,
-});
-
-const createMockReq = (overrides = {}): Partial<Request> => ({
-  headers: {},
   ...overrides,
 });
 
@@ -224,7 +232,7 @@ describe('🔴 Security Attack Simulations', () => {
        */
       await expect(
         authService.login({
-          email: { $ne: '' } as any,
+          email: { $ne: '' } as unknown as string,
           password: 'any',
         }),
       ).rejects.toThrow(); // TypeError: data.email.trim is not a function
@@ -243,10 +251,11 @@ describe('🔴 Security Attack Simulations', () => {
       try {
         await authService.login({
           email: 'victim@example.com',
-          password: { $ne: '' } as any,
+          password: { $ne: '' } as unknown as string,
         });
         fail('Should have thrown');
-      } catch (e: any) {
+      } catch (error) {
+        const e = error as ApiError;
         expect(e.statusCode).toBe(StatusCodes.UNAUTHORIZED);
       }
     });
@@ -281,7 +290,8 @@ describe('🔴 Security Attack Simulations', () => {
       for (const payload of sqlPayloads) {
         try {
           await authService.login({ email: payload, password: 'any' });
-        } catch (e: any) {
+        } catch (error) {
+          const e = error as ApiError;
           // Payload được truyền nguyên si vào findOne → không match ai
           expect(e.statusCode).toBe(StatusCodes.UNAUTHORIZED);
         }
@@ -385,15 +395,16 @@ describe('🔴 Security Attack Simulations', () => {
       // Verify: register luôn tạo token với role từ DB, không từ request
       const user = mockUser({ role: 'user' }); // DB luôn trả về role=user
       (UserMock.findOne as jest.Mock).mockResolvedValue(null);
-      (UserMock.create as jest.Mock).mockResolvedValue(user);
+      (UserMock.create as jest.Mock).mockResolvedValue([user]);
 
       const result = await authService.register({
         name: 'Hacker',
         email: 'hack@test.com',
         password: 'Strong1pass',
-      } as any);
+        role: 'admin',
+      } as unknown as { name: string; email: string; password: string });
 
-      const decoded = jwt.decode(result.accessToken) as any;
+      const decoded = jwt.decode(result.accessToken) as Record<string, unknown>;
       expect(decoded.role).toBe('user'); // Không phải admin
     });
   });
@@ -412,15 +423,15 @@ describe('🔴 Security Attack Simulations', () => {
 
     it('should return identical error for non-existent email and wrong password', async () => {
       // Attacker thử email random → nếu thông báo khác nhau, biết email tồn tại
-      let errorForWrongEmail: any;
-      let errorForWrongPassword: any;
+      let errorForWrongEmail: ApiError | undefined;
+      let errorForWrongPassword: ApiError | undefined;
 
       // Case 1: Email không tồn tại
       selectMock.mockResolvedValue(null);
       try {
         await authService.login({ email: 'nonexistent@hack.com', password: 'any' });
       } catch (e) {
-        errorForWrongEmail = e;
+        errorForWrongEmail = e as ApiError;
       }
 
       // Case 2: Email đúng, password sai
@@ -430,12 +441,12 @@ describe('🔴 Security Attack Simulations', () => {
       try {
         await authService.login({ email: 'victim@example.com', password: 'wrong' });
       } catch (e) {
-        errorForWrongPassword = e;
+        errorForWrongPassword = e as ApiError;
       }
 
       // Cả 2 phải trả về CÙNG MỘT error message
-      expect(errorForWrongEmail.message).toBe(errorForWrongPassword.message);
-      expect(errorForWrongEmail.statusCode).toBe(errorForWrongPassword.statusCode);
+      expect(errorForWrongEmail?.message).toBe(errorForWrongPassword?.message);
+      expect(errorForWrongEmail?.statusCode).toBe(errorForWrongPassword?.statusCode);
     });
   });
 
@@ -455,7 +466,8 @@ describe('🔴 Security Attack Simulations', () => {
       try {
         await authService.refresh({ refreshToken: stolenToken });
         fail('Should have thrown');
-      } catch (e: any) {
+      } catch (error) {
+        const e = error as ApiError;
         expect(e).toBeInstanceOf(ApiError);
         expect(e.statusCode).toBe(StatusCodes.UNAUTHORIZED);
         expect(e.message).toContain('AUTH_004');
@@ -475,7 +487,8 @@ describe('🔴 Security Attack Simulations', () => {
       try {
         await authService.refresh({ refreshToken: 'expired-token' });
         fail('Should have thrown');
-      } catch (e: any) {
+      } catch (error) {
+        const e = error as ApiError;
         expect(e.statusCode).toBe(StatusCodes.UNAUTHORIZED);
       }
 
@@ -504,7 +517,8 @@ describe('🔴 Security Attack Simulations', () => {
       try {
         await authService.refresh({ refreshToken: 'valid-token' });
         fail('Should have thrown');
-      } catch (e: any) {
+      } catch (error) {
+        const e = error as ApiError;
         expect(e.statusCode).toBe(StatusCodes.UNAUTHORIZED);
       }
 
@@ -526,7 +540,8 @@ describe('🔴 Security Attack Simulations', () => {
       try {
         await authService.refresh({ refreshToken: 'orphan-token' });
         fail('Should have thrown');
-      } catch (e: any) {
+      } catch (error) {
+        const e = error as ApiError;
         expect(e.statusCode).toBe(StatusCodes.UNAUTHORIZED);
       }
 
@@ -577,20 +592,19 @@ describe('🔴 Security Attack Simulations', () => {
         '654321',
       ];
 
-      const errors: any[] = [];
+      const errors: ApiError[] = [];
 
       for (const pw of top20Passwords) {
         try {
           await authService.login({ email: 'victim@example.com', password: pw });
           fail(`Should have rejected password: ${pw}`);
-        } catch (e: any) {
+        } catch (error) {
+          const e = error as ApiError;
           errors.push(e);
         }
       }
 
-      // TẤT CẢ phải bị từ chối
       expect(errors).toHaveLength(top20Passwords.length);
-      // TẤT CẢ phải trả cùng error code (không lộ thông tin nào khác)
       errors.forEach((e) => {
         expect(e.statusCode).toBe(StatusCodes.UNAUTHORIZED);
         expect(e.message).toContain('AUTH_002');
@@ -638,7 +652,8 @@ describe('🔴 Security Attack Simulations', () => {
       for (const pw of patterns) {
         try {
           await authService.login({ email: 'victim@example.com', password: pw });
-        } catch (e: any) {
+        } catch (error) {
+          const e = error as ApiError;
           rejectedCount++;
           expect(e.statusCode).toBe(StatusCodes.UNAUTHORIZED);
         }
@@ -666,7 +681,8 @@ describe('🔴 Security Attack Simulations', () => {
       for (const cred of leakedCredentials) {
         try {
           await authService.login(cred);
-        } catch (e: any) {
+        } catch (error) {
+          const e = error as ApiError;
           // Mỗi lần thử đều không lộ thêm thông tin
           expect(e.statusCode).toBe(StatusCodes.UNAUTHORIZED);
           expect(e.message).toContain('AUTH_002');
@@ -702,7 +718,8 @@ describe('🔴 Security Attack Simulations', () => {
         try {
           await authService.login({ email: 'victim@example.com', password: pw });
           allRejected = false;
-        } catch (e: any) {
+        } catch (error) {
+          const e = error as ApiError;
           expect(e.statusCode).toBe(StatusCodes.UNAUTHORIZED);
         }
       }
@@ -721,28 +738,28 @@ describe('🔴 Security Attack Simulations', () => {
 
       // Case 1: Email không tồn tại — service trả lỗi TRƯỚC khi gọi comparePassword
       selectMock.mockResolvedValue(null);
-      let errorNoUser: any;
+      let errorNoUser: ApiError | undefined;
       try {
         await authService.login({ email: 'ghost@example.com', password: 'any' });
       } catch (e) {
-        errorNoUser = e;
+        errorNoUser = e as ApiError;
       }
 
       // Case 2: Email tồn tại nhưng password sai
       const user = mockUser();
       user.comparePassword.mockResolvedValue(false);
       selectMock.mockResolvedValue(user);
-      let errorWrongPw: any;
+      let errorWrongPw: ApiError | undefined;
       try {
         await authService.login({ email: 'victim@example.com', password: 'wrong' });
       } catch (e) {
-        errorWrongPw = e;
+        errorWrongPw = e as ApiError;
       }
 
       // Cả 2 phải có CÙNG statusCode VÀ CÙNG message
       // → Attacker không thể phân biệt bằng nội dung response
-      expect(errorNoUser.statusCode).toBe(errorWrongPw.statusCode);
-      expect(errorNoUser.message).toBe(errorWrongPw.message);
+      expect(errorNoUser?.statusCode).toBe(errorWrongPw?.statusCode);
+      expect(errorNoUser?.message).toBe(errorWrongPw?.message);
 
       // Lưu ý: timing attack qua thời gian phản hồi là một vấn đề riêng
       // cần xử lý ở tầng infrastructure (rate limit đã giúp giảm thiểu)
@@ -772,7 +789,8 @@ describe('🔴 Security Attack Simulations', () => {
       for (const email of targetEmails) {
         try {
           await authService.login({ email, password: sprayPassword });
-        } catch (e: any) {
+        } catch (error) {
+          const e = error as ApiError;
           expect(e.statusCode).toBe(StatusCodes.UNAUTHORIZED);
           expect(e.message).toContain('AUTH_002');
         }
@@ -841,7 +859,7 @@ describe('🔴 Security Attack Simulations', () => {
       const expiredToken = jwt.sign(
         { userId: '507f1f77bcf86cd799439011', role: 'user' },
         JWT_SECRET,
-        { expiresIn: '-1h' } as any,
+        { expiresIn: '-1h' } as unknown as jwt.SignOptions,
       );
 
       const next = runMiddleware({
@@ -862,7 +880,7 @@ describe('🔴 Security Attack Simulations', () => {
     it('should NOT expose email in access token', async () => {
       const user = mockUser();
       (UserMock.findOne as jest.Mock).mockResolvedValue(null);
-      (UserMock.create as jest.Mock).mockResolvedValue(user);
+      (UserMock.create as jest.Mock).mockResolvedValue([user]);
 
       const result = await authService.register({
         name: 'Test',
@@ -870,18 +888,18 @@ describe('🔴 Security Attack Simulations', () => {
         password: 'Strong1pass',
       });
 
-      const decoded = jwt.decode(result.accessToken) as any;
+      const decoded = jwt.decode(result.accessToken);
       expect(decoded).not.toHaveProperty('email');
       expect(decoded).not.toHaveProperty('password');
       expect(decoded).not.toHaveProperty('name');
       // Chỉ có userId, role, iat, exp
-      expect(Object.keys(decoded).sort()).toEqual(['exp', 'iat', 'role', 'userId']);
+      expect(Object.keys(decoded as string).sort()).toEqual(['exp', 'iat', 'role', 'userId']);
     });
 
     it('should NOT use email as refresh token (must be random opaque string)', async () => {
       const user = mockUser();
       (UserMock.findOne as jest.Mock).mockResolvedValue(null);
-      (UserMock.create as jest.Mock).mockResolvedValue(user);
+      (UserMock.create as jest.Mock).mockResolvedValue([user]);
 
       const result = await authService.register({
         name: 'Test',
@@ -912,7 +930,8 @@ describe('🔴 Security Attack Simulations', () => {
       try {
         await authService.refresh({ refreshToken: 'my-refresh-token' });
         fail('Should have thrown');
-      } catch (e: any) {
+      } catch (error) {
+        const e = error as ApiError;
         expect(e.statusCode).toBe(StatusCodes.UNAUTHORIZED);
       }
     });

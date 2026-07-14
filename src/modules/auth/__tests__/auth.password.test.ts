@@ -4,6 +4,19 @@ import { RefreshToken } from '../refresh-token.model';
 import { PasswordReset, hashToken } from '../password-reset.model';
 import { StatusCodes } from 'http-status-codes';
 
+jest.mock('mongoose', () => {
+  const actual = jest.requireActual('mongoose');
+  return {
+    ...actual,
+    startSession: jest.fn().mockResolvedValue({
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      abortTransaction: jest.fn(),
+      endSession: jest.fn(),
+    }),
+  };
+});
+
 jest.mock('@modules/users/users.model');
 jest.mock('../refresh-token.model', () => {
   const actual = jest.requireActual('../refresh-token.model');
@@ -81,13 +94,19 @@ describe('Password Management & Logout All', () => {
       const result = await authService.forgotPassword({ email: 'test@example.com' });
 
       expect(UserMock.findOne).toHaveBeenCalledWith({ email: 'test@example.com' });
-      expect(PasswordResetMock.deleteMany).toHaveBeenCalledWith({ userId: user._id });
+      expect(PasswordResetMock.deleteMany).toHaveBeenCalledWith(
+        { userId: user._id },
+        expect.objectContaining({ session: expect.anything() }),
+      );
       expect(PasswordResetMock.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          token: expect.any(String),
-          userId: user._id,
-          expiresAt: expect.any(Date),
-        }),
+        [
+          expect.objectContaining({
+            token: expect.any(String),
+            userId: user._id,
+            expiresAt: expect.any(Date),
+          }),
+        ],
+        expect.objectContaining({ session: expect.anything() }),
       );
       expect(result).toHaveProperty('resetToken');
       expect(result!.resetToken.length).toBe(64); // 32 bytes hex
@@ -98,9 +117,9 @@ describe('Password Management & Logout All', () => {
       (UserMock.findOne as jest.Mock).mockResolvedValue(user);
 
       const result = await authService.forgotPassword({ email: 'test@example.com' });
-
-      const createCall = (PasswordResetMock.create as jest.Mock).mock.calls[0][0];
-      const storedToken = createCall.token;
+      expect(PasswordResetMock.create).toHaveBeenCalled();
+      const createArgs = (PasswordResetMock.create as jest.Mock).mock.calls[0];
+      const storedToken = createArgs[0][0].token;
       const expectedHash = hashToken(result!.resetToken);
 
       expect(storedToken).toBe(expectedHash);
@@ -154,8 +173,14 @@ describe('Password Management & Logout All', () => {
       });
 
       expect(user.save).toHaveBeenCalled();
-      expect(PasswordResetMock.deleteMany).toHaveBeenCalledWith({ userId: user._id });
-      expect(RefreshTokenMock.deleteMany).toHaveBeenCalledWith({ userId: user._id });
+      expect(PasswordResetMock.deleteMany).toHaveBeenCalledWith(
+        { userId: user._id },
+        expect.objectContaining({ session: expect.anything() }),
+      );
+      expect(RefreshTokenMock.deleteMany).toHaveBeenCalledWith(
+        { userId: user._id },
+        expect.objectContaining({ session: expect.anything() }),
+      );
     });
 
     it('should throw BadRequestError if token not found', async () => {
@@ -209,7 +234,10 @@ describe('Password Management & Logout All', () => {
 
       await authService.resetPassword({ token: 'valid-token', password: 'NewPass123' });
 
-      expect(RefreshTokenMock.deleteMany).toHaveBeenCalledWith({ userId: user._id });
+      expect(RefreshTokenMock.deleteMany).toHaveBeenCalledWith(
+        { userId: user._id },
+        expect.objectContaining({ session: expect.anything() }),
+      );
     });
   });
 
@@ -235,7 +263,10 @@ describe('Password Management & Logout All', () => {
 
       expect(user.password).toBe('NewPass456');
       expect(user.save).toHaveBeenCalled();
-      expect(RefreshTokenMock.deleteMany).toHaveBeenCalledWith({ userId: user._id });
+      expect(RefreshTokenMock.deleteMany).toHaveBeenCalledWith(
+        { userId: user._id },
+        expect.objectContaining({ session: expect.anything() }),
+      );
     });
 
     it('should throw UnauthorizedError if current password is wrong', async () => {
@@ -312,7 +343,10 @@ describe('Password Management & Logout All', () => {
         newPassword: 'NewPass456',
       });
 
-      expect(RefreshTokenMock.deleteMany).toHaveBeenCalledWith({ userId: user._id });
+      expect(RefreshTokenMock.deleteMany).toHaveBeenCalledWith(
+        { userId: user._id },
+        expect.objectContaining({ session: expect.anything() }),
+      );
     });
   });
 
