@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -6,6 +7,7 @@ import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import { StatusCodes } from 'http-status-codes';
 import swaggerUi from 'swagger-ui-express';
+import path from 'path';
 
 // Shared
 import { errorMiddleware } from '@shared/middlewares/error.middleware';
@@ -15,8 +17,14 @@ import { swaggerSpec } from '@shared/config/swagger';
 // Module routes
 import authRoutes from '@modules/auth/auth.routes';
 import usersRoutes from '@modules/users/users.routes';
+import filesRoutes from '@modules/files/files.routes';
+import chatRoutes from '@modules/chat/chat.routes';
+
+// WebSocket
+import { initChatGateway } from '@modules/chat/chat.gateway';
 
 const app = express();
+const server = createServer(app);
 
 // ─── Security ────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -86,9 +94,14 @@ app.get('/', (_req: Request, res: Response) => {
   res.redirect('/docs');
 });
 
+// ─── Static Frontend Test ────────────────────────────────────
+app.use('/test', express.static(path.join(__dirname, 'public')));
+
 // ─── API Routes ──────────────────────────────────────────────
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', usersRoutes);
+app.use('/api/v1/files', filesRoutes);
+app.use('/api/v1/chat', chatRoutes);
 
 // ─── 404 Handler ─────────────────────────────────────────────
 app.use((_req: Request, _res: Response, next) => {
@@ -98,4 +111,7 @@ app.use((_req: Request, _res: Response, next) => {
 // ─── Global Error Handler ────────────────────────────────────
 app.use(errorMiddleware);
 
-export default app;
+// ─── WebSocket (Socket.IO) ──────────────────────────────────────
+initChatGateway(server);
+
+export default server;

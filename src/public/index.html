@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Tester Dashboard</title>
+    <style>
+        :root { --bg: #1e1e2f; --panel: #2a2a40; --text: #eee; --primary: #e94560; --border: #3f3f5a; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Sidebar */
+        .sidebar { width: 250px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+        .sidebar h2 { padding: 20px; font-size: 18px; border-bottom: 1px solid var(--border); color: var(--primary); }
+        .nav-btn { background: none; border: none; color: var(--text); padding: 15px 20px; text-align: left; cursor: pointer; font-size: 14px; border-bottom: 1px solid var(--border); transition: background 0.2s; }
+        .nav-btn:hover { background: #3a3a55; }
+        .nav-btn.active { background: var(--primary); font-weight: bold; }
+        .user-info { margin-top: auto; padding: 15px; background: #151522; font-size: 12px; word-break: break-all; }
+        
+        /* Content Area */
+        .content { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+        .section { display: none; background: var(--panel); padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        .section.active { display: block; }
+        h3 { margin-bottom: 15px; color: var(--primary); }
+        
+        /* Forms */
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-size: 12px; color: #aaa; margin-bottom: 5px; }
+        input, select { width: 100%; padding: 10px; background: #151522; border: 1px solid var(--border); color: var(--text); border-radius: 4px; outline: none; }
+        input:focus, select:focus { border-color: var(--primary); }
+        button { padding: 10px 15px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { opacity: 0.9; }
+        
+        /* Logger / Results */
+        pre { background: #151522; padding: 15px; border-radius: 4px; font-size: 12px; overflow-x: auto; color: #a6e22e; border: 1px solid var(--border); margin-top: 10px; white-space: pre-wrap; }
+        
+        /* Chat UI */
+        .chat-container { display: flex; height: 500px; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; margin-top: 15px; }
+        .chat-sidebar { width: 200px; background: #151522; border-right: 1px solid var(--border); overflow-y: auto; }
+        .conv-item { padding: 10px; cursor: pointer; border-bottom: 1px solid var(--border); font-size: 13px; }
+        .conv-item:hover { background: var(--panel); }
+        .chat-main { flex: 1; display: flex; flex-direction: column; background: var(--bg); }
+        .chat-messages { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .msg { max-width: 80%; padding: 8px 12px; border-radius: 8px; font-size: 13px; }
+        .msg-mine { background: var(--primary); align-self: flex-end; }
+        .msg-other { background: var(--panel); align-self: flex-start; }
+        .msg-other strong { display: block; font-size: 10px; color: var(--primary); margin-bottom: 3px; }
+        .chat-input { display: flex; padding: 10px; background: var(--panel); border-top: 1px solid var(--border); }
+        .chat-input input { flex: 1; margin-right: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>🚀 API Tester</h2>
+    <button class="nav-btn active" onclick="showSection('auth')">🔐 Auth (Login/Reg)</button>
+    <button class="nav-btn" onclick="showSection('files')">📁 Files (MinIO)</button>
+    <button class="nav-btn" onclick="showSection('chat')">💬 Chat (Socket.IO)</button>
+    <button class="nav-btn" onclick="showSection('users')">👥 Users API</button>
+    
+    <div class="user-info">
+        <strong style="color:var(--primary)">Current User:</strong><br>
+        <span id="currentUserDisplay">Not logged in</span><br><br>
+        <button onclick="logout()" style="padding:5px 10px; font-size:11px;">Logout</button>
+    </div>
+</div>
+
+<div class="content">
+    
+    <!-- AUTH SECTION -->
+    <div id="auth" class="section active">
+        <h3>Authentication</h3>
+        <div style="display:flex; gap:20px;">
+            <div style="flex:1;">
+                <h4>Login</h4><br>
+                <div class="form-group"><input type="email" id="loginEmail" placeholder="Email" value="user@example.com"></div>
+                <div class="form-group"><input type="password" id="loginPassword" placeholder="Password" value="Password@123"></div>
+                <button onclick="apiLogin()">Login</button>
+            </div>
+            <div style="flex:1;">
+                <h4>Register</h4><br>
+                <div class="form-group"><input type="text" id="regName" placeholder="Name"></div>
+                <div class="form-group"><input type="email" id="regEmail" placeholder="Email"></div>
+                <div class="form-group"><input type="password" id="regPassword" placeholder="Password"></div>
+                <button onclick="apiRegister()">Register</button>
+            </div>
+        </div>
+        <pre id="authOutput">Logs will appear here...</pre>
+    </div>
+
+    <!-- FILES SECTION -->
+    <div id="files" class="section">
+        <h3>Files Upload (Presigned URL)</h3>
+        <p style="font-size:13px; color:#aaa; margin-bottom:15px;">Test uploading directly to MinIO using presigned URLs.</p>
+        
+        <div class="form-group">
+            <label>Select a file (Image or Audio):</label>
+            <input type="file" id="fileInput">
+        </div>
+        <button onclick="uploadToMinio()">Generate URL & Upload</button>
+        
+        <div style="margin-top:15px; font-size:13px;" id="uploadProgress"></div>
+        <pre id="filesOutput">Logs will appear here...</pre>
+    </div>
+
+    <!-- CHAT SECTION -->
+    <div id="chat" class="section">
+        <h3>Real-time Chat</h3>
+        <div style="display:flex; gap:10px; margin-bottom:15px;">
+            <input type="text" id="partnerId" placeholder="Participant User ID (for 1-1)" style="flex:1;">
+            <button onclick="create1on1()">Create 1-1 Chat</button>
+        </div>
+        <div style="display:flex; gap:10px; margin-bottom:15px;">
+            <input type="text" id="groupName" placeholder="Group Name" style="flex:1;">
+            <input type="text" id="groupMembers" placeholder="Comma separated User IDs" style="flex:1;">
+            <button onclick="createGroup()">Create Group</button>
+        </div>
+
+        <div class="chat-container">
+            <div class="chat-sidebar" id="convList">
+                <div style="padding:10px;font-size:12px;color:#888;">Load conversations...</div>
+            </div>
+            <div class="chat-main" id="chatMain" style="display:none;">
+                <div style="padding:10px; background:var(--panel); border-bottom:1px solid var(--border); font-weight:bold;" id="chatTitle">Room</div>
+                <div class="chat-messages" id="chatMessages"></div>
+                <div style="padding:0 10px; font-size:11px; color:#888; font-style:italic; min-height:16px;" id="typingIndicator"></div>
+                <div class="chat-input">
+                    <input type="text" id="chatInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter') sendChatMessage()" oninput="handleTyping()">
+                    <button onclick="sendChatMessage()">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- USERS SECTION -->
+    <div id="users" class="section">
+        <h3>Users API</h3>
+        <button onclick="fetchUsers()">Load Users List</button>
+        <pre id="usersOutput">Logs will appear here...</pre>
+    </div>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    // --- Global State ---
+    let token = localStorage.getItem('accessToken') || '';
+    let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+    let socket = null;
+    let currentRoomId = null;
+    let typingTimeout = null;
+
+    const authHeaders = () => ({
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+    });
+
+    function logOutput(elementId, data) {
+        document.getElementById(elementId).innerText = typeof data === 'object' ? JSON.stringify(data, null, 2) : data;
+    }
+
+    // --- Init ---
+    function init() {
+        if (currentUser && token) {
+            document.getElementById('currentUserDisplay').innerText = `${currentUser.name}\n${currentUser.email}\nID: ${currentUser.id || currentUser._id}`;
+            initSocket();
+            loadConversations();
+        } else {
+            document.getElementById('currentUserDisplay').innerText = 'Not logged in';
+        }
+    }
+
+    function logout() {
+        localStorage.clear();
+        token = '';
+        currentUser = null;
+        if(socket) socket.disconnect();
+        init();
+        showSection('auth');
+    }
+
+    function showSection(id) {
+        document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        event.target.classList.add('active');
+    }
+
+    // --- API: Auth ---
+    async function apiLogin() {
+        const email = document.getElementById('loginEmail').value;
+        const password = document.getElementById('loginPassword').value;
+        try {
+            const res = await fetch('/api/v1/auth/login', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            const data = await res.json();
+            logOutput('authOutput', data);
+            if (data.success) {
+                token = data.data.accessToken;
+                currentUser = data.data.user;
+                localStorage.setItem('accessToken', token);
+                localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                init();
+            }
+        } catch (e) { logOutput('authOutput', e.message); }
+    }
+
+    async function apiRegister() {
+        const name = document.getElementById('regName').value;
+        const email = document.getElementById('regEmail').value;
+        const password = document.getElementById('regPassword').value;
+        try {
+            const res = await fetch('/api/v1/auth/register', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email, password })
+            });
+            const data = await res.json();
+            logOutput('authOutput', data);
+        } catch (e) { logOutput('authOutput', e.message); }
+    }
+
+    // --- API: Users ---
+    async function fetchUsers() {
+        try {
+            const res = await fetch('/api/v1/users', { headers: authHeaders() });
+            const data = await res.json();
+            logOutput('usersOutput', data);
+        } catch (e) { logOutput('usersOutput', e.message); }
+    }
+
+    // --- API: Files (MinIO) ---
+    async function uploadToMinio() {
+        const fileInput = document.getElementById('fileInput');
+        if (!fileInput.files.length) return alert('Select a file first');
+        const file = fileInput.files[0];
+        
+        try {
+            // 1. Get Presigned URL
+            document.getElementById('uploadProgress').innerText = '1. Generating Presigned URL...';
+            const urlRes = await fetch('/api/v1/files/generate-minio-url', {
+                method: 'POST', headers: authHeaders(),
+                body: JSON.stringify({ fileName: file.name, contentType: file.type })
+            });
+            const urlData = await urlRes.json();
+            logOutput('filesOutput', urlData);
+            
+            if (!urlData.success) throw new Error(urlData.message);
+
+            // 2. Upload to MinIO
+            document.getElementById('uploadProgress').innerText = '2. Uploading directly to MinIO...';
+            const uploadRes = await fetch(urlData.data.uploadUrl, {
+                method: 'PUT',
+                headers: { 'Content-Type': file.type },
+                body: file
+            });
+
+            if (uploadRes.ok) {
+                document.getElementById('uploadProgress').innerHTML = `✅ Success! Public URL: <a href="${urlData.data.finalUrl}" target="_blank">${urlData.data.finalUrl}</a>`;
+            } else {
+                throw new Error('Upload to MinIO failed');
+            }
+        } catch (e) {
+            document.getElementById('uploadProgress').innerText = '❌ Error: ' + e.message;
+        }
+    }
+
+    // --- API: Chat (Socket.IO + REST) ---
+    function initSocket() {
+        if (socket) return;
+        socket = io();
+        socket.on('connect', () => {
+            console.log('Socket connected');
+            socket.emit('chat:join', currentUser.id || currentUser._id);
+        });
+
+        socket.on('chat:message', (msg) => {
+            if (msg.conversationId === currentRoomId) {
+                appendMessage(msg);
+            }
+            loadConversations(); // refresh list to show latest msg
+        });
+
+        socket.on('chat:typing', (data) => {
+            if (data.userId !== (currentUser.id || currentUser._id)) {
+                document.getElementById('typingIndicator').innerText = data.isTyping ? 'Someone is typing...' : '';
+            }
+        });
+    }
+
+    async function loadConversations() {
+        if (!token) return;
+        try {
+            const res = await fetch(`/api/v1/chat/conversations`, { headers: authHeaders() });
+            const data = await res.json();
+            const list = document.getElementById('convList');
+            list.innerHTML = '';
+            if (data.success) {
+                data.data.forEach(conv => {
+                    const div = document.createElement('div');
+                    div.className = 'conv-item';
+                    
+                    let name = conv.isGroup ? `👥 ${conv.groupName}` : (conv.participants.find(p => p._id !== (currentUser.id || currentUser._id))?.name || 'Unknown');
+                    
+                    div.innerHTML = `<strong>${name}</strong><br><span style="font-size:10px;color:#aaa">${conv.lastMessage?.content || 'No messages'}</span>`;
+                    div.onclick = () => openRoom(conv._id, name);
+                    list.appendChild(div);
+                });
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    async function create1on1() {
+        const pId = document.getElementById('partnerId').value;
+        if (!pId) return alert('Need Partner ID');
+        try {
+            const res = await fetch('/api/v1/chat/conversations', {
+                method: 'POST', headers: authHeaders(),
+                body: JSON.stringify({ participantId: pId })
+            });
+            const data = await res.json();
+            if (data.success) {
+                loadConversations();
+                openRoom(data.data._id, 'Chat Room');
+            } else alert(data.message);
+        } catch (e) { alert(e.message); }
+    }
+
+    async function createGroup() {
+        const gName = document.getElementById('groupName').value;
+        const gMembers = document.getElementById('groupMembers').value.split(',').map(s=>s.trim()).filter(Boolean);
+        if (!gName || gMembers.length === 0) return alert('Need Group Name and at least 1 member');
+        
+        gMembers.push(currentUser.id || currentUser._id); // add myself
+
+        try {
+            const res = await fetch('/api/v1/chat/groups', {
+                method: 'POST', headers: authHeaders(),
+                body: JSON.stringify({ groupName: gName, memberIds: gMembers })
+            });
+            const data = await res.json();
+            if (data.success) {
+                loadConversations();
+                openRoom(data.data._id, `👥 ${gName}`);
+            } else alert(data.message);
+        } catch (e) { alert(e.message); }
+    }
+
+    async function openRoom(roomId, roomName) {
+        if (currentRoomId && socket) socket.emit('chat:leave-room', currentRoomId);
+        currentRoomId = roomId;
+        
+        document.getElementById('chatMain').style.display = 'flex';
+        document.getElementById('chatTitle').innerText = roomName;
+        document.getElementById('chatMessages').innerHTML = '';
+        
+        if (socket) socket.emit('chat:join-room', roomId);
+
+        // Load history
+        try {
+            const res = await fetch(`/api/v1/chat/conversations/${roomId}/messages`, { headers: authHeaders() });
+            const data = await res.json();
+            if (data.success && data.data) {
+                data.data.forEach(msg => appendMessage(msg));
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    function appendMessage(msg) {
+        const container = document.getElementById('chatMessages');
+        const isMine = msg.senderId?._id === (currentUser.id || currentUser._id) || msg.senderId === (currentUser.id || currentUser._id);
+        const div = document.createElement('div');
+        div.className = `msg ${isMine ? 'msg-mine' : 'msg-other'}`;
+        if (!isMine) {
+            const senderName = msg.senderId?.name || 'Unknown';
+            div.innerHTML = `<strong>${senderName}</strong>`;
+        }
+        div.innerHTML += msg.content;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function sendChatMessage() {
+        const input = document.getElementById('chatInput');
+        const content = input.value.trim();
+        if (!content || !currentRoomId || !socket) return;
+
+        socket.emit('chat:message', { conversationId: currentRoomId, content });
+        socket.emit('chat:typing', { conversationId: currentRoomId, isTyping: false });
+        input.value = '';
+    }
+
+    function handleTyping() {
+        if (!socket || !currentRoomId) return;
+        socket.emit('chat:typing', { conversationId: currentRoomId, isTyping: true });
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+            socket.emit('chat:typing', { conversationId: currentRoomId, isTyping: false });
+        }, 1500);
+    }
+
+    init();
+</script>
+
+</body>
+</html>

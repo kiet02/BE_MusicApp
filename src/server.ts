@@ -1,15 +1,15 @@
 import { config } from '@shared/config/env';
 import { connectDatabase, disconnectDatabase } from '@shared/config/database';
 import { logger } from '@shared/utils/logger';
-import app from './app';
+import server from './app';
 
 const startServer = async () => {
   try {
     // Connect to MongoDB
     await connectDatabase();
 
-    // Start server
-    const server = app.listen(config.port, () => {
+    // Start server (app.ts exports HTTP server with Socket.IO already attached)
+    server.listen(config.port, () => {
       const baseUrl =
         config.env === 'production' ? `Port ${config.port}` : `http://localhost:${config.port}`;
 

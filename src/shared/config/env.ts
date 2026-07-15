@@ -23,6 +23,16 @@ const envSchema = z.object({
 
   // Google OAuth
   GOOGLE_CLIENT_ID: z.string().default(''),
+
+  // MinIO Storage
+  MINIO_ENDPOINT: z.string({ message: 'MinIO endpoint is required' }),
+  MINIO_PORT: z.string({ message: 'MinIO port is required' }).transform(Number),
+  MINIO_USE_SSL: z
+    .enum(['true', 'false'], { message: 'MinIO use SSL must be true or false' })
+    .transform((val) => val === 'true'),
+  MINIO_ACCESS_KEY: z.string({ message: 'MinIO access key is required' }),
+  MINIO_SECRET_KEY: z.string({ message: 'MinIO secret key is required' }),
+  MINIO_BUCKET_NAME: z.string({ message: 'MinIO bucket name is required' }),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
@@ -53,6 +63,14 @@ export const config = {
   },
   google: {
     clientId: envVars.GOOGLE_CLIENT_ID as string,
+  },
+  minio: {
+    endpoint: envVars.MINIO_ENDPOINT as string,
+    port: envVars.MINIO_PORT as number,
+    useSSL: envVars.MINIO_USE_SSL as boolean,
+    accessKey: envVars.MINIO_ACCESS_KEY as string,
+    secretKey: envVars.MINIO_SECRET_KEY as string,
+    bucketName: envVars.MINIO_BUCKET_NAME as string,
   },
   isDevelopment: envVars.NODE_ENV === 'development',
   isProduction: envVars.NODE_ENV === 'production',

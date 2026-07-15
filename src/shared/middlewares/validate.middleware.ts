@@ -35,7 +35,12 @@ export const validate = (schema: ValidationSchema) => {
           // Since we already found an error, we can just break entirely.
           break;
         } else {
-          req[source] = parsed.data;
+          Object.defineProperty(req, source, {
+            value: parsed.data,
+            writable: true,
+            configurable: true,
+            enumerable: true,
+          });
         }
       }
     }
